@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FOCUS TIMER</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Rajdhani:wght@300;400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --silver: #c8cdd4;
+    --silver-bright: #e8edf4;
+    --silver-dim: #8a9099;
+    --gold: #b8a060;
+    --black-card: #0a0a0f;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #000; color: var(--silver); font-family: 'Rajdhani', sans-serif; min-height: 100vh; overflow: hidden; user-select: none; }
+  #bgCanvas { position: fixed; inset: 0; z-index: 0; }
+  #particleCanvas { position: fixed; inset: 0; z-index: 1; pointer-events: none; }
+  .screen { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.8s ease; }
+  .screen.active { opacity: 1; pointer-events: all; }
+
+  /* INTRO */
+  #introScreen { background: #000; gap: 0; }
+  .intro-clock-wrap { position: relative; width: 220px; height: 220px; margin-bottom: 40px; }
+  #introClock { width: 220px; height: 220px; filter: drop-shadow(0 0 30px rgba(200,205,212,0.4)); }
+  .moon-symbol { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 52px; color: var(--silver-bright); text-shadow: 0 0 20px rgba(200,205,212,0.9),0 0 60px rgba(200,205,212,0.3); animation: moonPulse 3s ease-in-out infinite; }
+  @keyframes moonPulse {
+    0%,100% { text-shadow: 0 0 20px rgba(200,205,212,0.9),0 0 60px rgba(200,205,212,0.3); transform: translate(-50%,-50%) scale(1); }
+    50% { text-shadow: 0 0 40px rgba(200,205,212,1),0 0 100px rgba(200,205,212,0.6); transform: translate(-50%,-50%) scale(1.08); }
+  }
+  .intro-title { font-family: 'Cinzel', serif; font-size: clamp(32px,6vw,54px); font-weight: 900; letter-spacing: 0.18em; color: var(--silver-bright); text-shadow: 0 0 40px rgba(200,205,212,0.5); margin-bottom: 8px; text-align: center; }
+  .intro-subtitle { font-family: 'Share Tech Mono', monospace; font-size: 13px; letter-spacing: 0.3em; color: var(--silver-dim); margin-bottom: 64px; text-transform: uppercase; }
+  .intro-tagline { font-size: 14px; letter-spacing: 0.15em; color: var(--silver-dim); margin-bottom: 48px; font-style: italic; opacity: 0.7; transition: opacity 0.4s; }
+  .btn-start { font-family: 'Cinzel', serif; font-size: 15px; font-weight: 700; letter-spacing: 0.25em; color: #000; background: var(--silver-bright); border: none; padding: 18px 52px; cursor: pointer; clip-path: polygon(12px 0%,100% 0%,calc(100% - 12px) 100%,0% 100%); box-shadow: 0 0 40px rgba(200,205,212,0.4),0 0 80px rgba(200,205,212,0.15); transition: all 0.3s ease; position: relative; overflow: hidden; }
+  .btn-start::before { content:''; position: absolute; inset:0; background: linear-gradient(90deg,transparent,rgba(255,255,255,0.3),transparent); transform: translateX(-100%); transition: transform 0.5s ease; }
+  .btn-start:hover { box-shadow: 0 0 60px rgba(200,205,212,0.7),0 0 120px rgba(200,205,212,0.3); transform: scale(1.04); }
+  .btn-start:hover::before { transform: translateX(100%); }
+  .btn-start:active { transform: scale(0.97); }
+
+  /* SETUP */
+  #setupScreen { overflow-y: auto; padding: 24px 16px; background: linear-gradient(180deg,#000 0%,#06060c 100%); }
+  .setup-wrap { width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 24px; padding: 8px 0 24px; }
+  .setup-header { font-family: 'Cinzel', serif; font-size: clamp(18px,4vw,26px); font-weight: 900; letter-spacing: 0.2em; color: var(--silver-bright); text-align: center; text-shadow: 0 0 30px rgba(200,205,212,0.4); padding-bottom: 8px; border-bottom: 1px solid rgba(200,205,212,0.12); }
+  .setup-section { display: flex; flex-direction: column; gap: 10px; }
+  .setup-label { font-family: 'Share Tech Mono', monospace; font-size: 11px; letter-spacing: 0.3em; color: var(--silver-dim); text-transform: uppercase; }
+  .time-inputs { display: flex; gap: 12px; align-items: center; }
+  .time-inputs span { font-family: 'Share Tech Mono', monospace; font-size: 22px; color: var(--silver-dim); }
+  .time-input-wrap { flex: 1; position: relative; }
+  .time-input-wrap label { position: absolute; bottom: -18px; left:0; right:0; text-align: center; font-size: 10px; letter-spacing: 0.2em; color: var(--silver-dim); opacity: 0.6; text-transform: uppercase; }
+  input[type=number] { width: 100%; padding: 14px 10px; background: var(--black-card); border: 1px solid rgba(200,205,212,0.18); color: var(--silver-bright); font-family: 'Share Tech Mono', monospace; font-size: 28px; text-align: center; outline: none; -moz-appearance: textfield; transition: border-color 0.3s,box-shadow 0.3s; }
+  input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
+  input[type=number]:focus { border-color: var(--silver); box-shadow: 0 0 20px rgba(200,205,212,0.2); }
+  input[type=text] { width: 100%; padding: 14px 16px; background: var(--black-card); border: 1px solid rgba(200,205,212,0.18); color: var(--silver-bright); font-family: 'Rajdhani', sans-serif; font-size: 18px; letter-spacing: 0.05em; outline: none; transition: border-color 0.3s,box-shadow 0.3s; }
+  input[type=text]::placeholder { color: var(--silver-dim); opacity: 0.4; }
+  input[type=text]:focus { border-color: var(--silver); box-shadow: 0 0 20px rgba(200,205,212,0.2); }
+  .duration-section { transition: opacity 0.3s; }
+  .duration-section.hidden { opacity: 0.25; pointer-events: none; }
+  .option-row { display: flex; gap: 10px; }
+  .opt-card { flex: 1; padding: 14px 10px; background: var(--black-card); border: 1px solid rgba(200,205,212,0.12); cursor: pointer; text-align: center; transition: all 0.25s ease; position: relative; overflow: hidden; }
+  .opt-card .opt-icon { font-size: 22px; margin-bottom: 6px; }
+  .opt-card .opt-name { font-family: 'Cinzel', serif; font-size: 12px; letter-spacing: 0.12em; color: var(--silver-dim); }
+  .opt-card .opt-desc { font-size: 10px; color: rgba(138,144,153,0.6); margin-top: 4px; letter-spacing: 0.05em; line-height: 1.3; }
+  .opt-card:hover { border-color: rgba(200,205,212,0.35); background: rgba(200,205,212,0.04); }
+  .opt-card.selected { border-color: var(--silver); background: rgba(200,205,212,0.08); box-shadow: 0 0 20px rgba(200,205,212,0.15),inset 0 0 20px rgba(200,205,212,0.03); }
+  .opt-card.selected .opt-name { color: var(--silver-bright); }
+  .opt-card.selected::after { content: '✓'; position: absolute; top: 6px; right: 8px; font-size: 10px; color: var(--silver-bright); }
+  .mode-warning { font-size: 11px; letter-spacing: 0.08em; color: rgba(184,160,96,0.7); text-align: center; padding: 8px; border: 1px solid rgba(184,160,96,0.2); background: rgba(184,160,96,0.04); display: none; }
+  .mode-warning.visible { display: block; }
+  .btn-begin { font-family: 'Cinzel', serif; font-size: 16px; font-weight: 700; letter-spacing: 0.2em; color: #000; background: var(--silver-bright); border: none; padding: 20px; cursor: pointer; width: 100%; box-shadow: 0 0 40px rgba(200,205,212,0.3); transition: all 0.3s ease; }
+  .btn-begin:hover { box-shadow: 0 0 60px rgba(200,205,212,0.6); transform: scale(1.02); }
+
+  /* TIMER SCREEN */
+  #timerScreen { background: #000; flex-direction: column; gap: 0; }
+  .timer-bar { width: 100%; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(200,205,212,0.08); background: rgba(0,0,0,0.8); backdrop-filter: blur(10px); z-index: 20; flex-shrink: 0; }
+  .bar-btn { font-family: 'Cinzel', serif; font-weight: 800; font-size: 13px; letter-spacing: 0.15em; background: none; border: 1px solid rgba(200,205,212,0.18); padding: 8px 16px; cursor: pointer; transition: all 0.25s; color: #d4d9e0; text-shadow: 0 0 8px rgba(200,205,212,0.3); }
+  .bar-btn:hover { border-color: var(--silver); color: var(--silver-bright); background: rgba(200,205,212,0.05); }
+  .bar-btn:disabled { opacity: 0.25; cursor: not-allowed; }
+  .bar-title { font-family: 'Cinzel', serif; font-size: clamp(11px,2.5vw,15px); font-weight: 800; letter-spacing: 0.2em; color: #c0c5cc; text-shadow: 0 0 10px rgba(200,205,212,0.25); }
+  .tagline-wrap { height: 44px; display: flex; align-items: center; justify-content: center; padding: 0 24px; flex-shrink: 0; }
+  .tagline { font-family: 'Rajdhani', sans-serif; font-size: clamp(12px,2.5vw,15px); letter-spacing: 0.12em; color: var(--silver-dim); text-align: center; font-style: italic; transition: opacity 0.6s ease; }
+  .clock-area { flex: 1; display: flex; align-items: center; justify-content: center; position: relative; }
+
+  /* DIGITAL — fat digits */
+  .clock-digital { display: none; flex-direction: column; align-items: center; gap: 12px; }
+  .clock-digital.active { display: flex; }
+  .digital-time { font-family: 'Share Tech Mono', monospace; font-size: clamp(72px,17vw,140px); color: var(--silver-bright); text-shadow: 0 0 40px rgba(200,205,212,0.6),0 0 80px rgba(200,205,212,0.2); letter-spacing: 0.06em; line-height: 1; font-weight: 900; -webkit-text-stroke: 2px var(--silver-bright); paint-order: stroke fill; }
+  .digital-label { font-family: 'Share Tech Mono', monospace; font-size: 12px; letter-spacing: 0.35em; color: var(--silver-dim); text-transform: uppercase; }
+
+  /* ANALOG */
+  .clock-analog { display: none; align-items: center; justify-content: center; flex-direction: column; gap: 16px; }
+  .clock-analog.active { display: flex; }
+  #analogCanvas { filter: drop-shadow(0 0 30px rgba(200,205,212,0.3)); }
+  .analog-time-text { font-family: 'Share Tech Mono', monospace; font-size: clamp(28px,6vw,48px); color: var(--silver-bright); text-shadow: 0 0 20px rgba(200,205,212,0.5); letter-spacing: 0.1em; }
+
+  /* HOURGLASS — fat digits */
+  .clock-hourglass { display: none; flex-direction: column; align-items: center; gap: 20px; }
+  .clock-hourglass.active { display: flex; }
+  #hourglassCanvas { filter: drop-shadow(0 0 30px rgba(200,205,212,0.25)); }
+  .hourglass-time { font-family: 'Share Tech Mono', monospace; font-size: clamp(48px,10vw,80px); color: var(--silver-bright); text-shadow: 0 0 30px rgba(200,205,212,0.6); letter-spacing: 0.12em; font-weight: 900; -webkit-text-stroke: 2px var(--silver-bright); paint-order: stroke fill; }
+
+  .bottom-bar { width: 100%; padding: 16px 20px; display: flex; align-items: center; justify-content: center; gap: 12px; border-top: 1px solid rgba(200,205,212,0.08); background: rgba(0,0,0,0.8); backdrop-filter: blur(10px); flex-shrink: 0; flex-wrap: wrap; }
+  .btn-action { font-family: 'Cinzel', serif; font-size: 13px; font-weight: 800; letter-spacing: 0.15em; padding: 12px 24px; cursor: pointer; transition: all 0.25s ease; border: 1px solid rgba(200,205,212,0.3); background: rgba(200,205,212,0.06); color: #d4d9e0; text-shadow: 0 0 8px rgba(200,205,212,0.3); }
+  .btn-action:hover { background: rgba(200,205,212,0.12); border-color: var(--silver); color: var(--silver-bright); }
+  .btn-action.primary { background: rgba(200,205,212,0.15); border-color: var(--silver-bright); }
+  .btn-action:disabled { opacity: 0.2; cursor: not-allowed; }
+  .session-info { font-family: 'Share Tech Mono', monospace; font-size: 11px; letter-spacing: 0.2em; color: var(--silver-dim); opacity: 0.5; text-align: center; width: 100%; text-transform: uppercase; }
+
+  /* DONE */
+  #doneScreen { background: #000; }
+  .done-wrap { display: flex; flex-direction: column; align-items: center; gap: 28px; padding: 32px 24px; max-width: 420px; width: 100%; }
+  .done-icon { font-size: 64px; animation: doneGlow 2s ease-in-out infinite; }
+  @keyframes doneGlow { 0%,100% { filter: drop-shadow(0 0 10px rgba(200,205,212,0.5)); } 50% { filter: drop-shadow(0 0 30px rgba(200,205,212,1)); } }
+  .done-title { font-family: 'Cinzel', serif; font-size: clamp(22px,5vw,36px); font-weight: 900; letter-spacing: 0.2em; color: var(--silver-bright); text-align: center; text-shadow: 0 0 40px rgba(200,205,212,0.6); }
+  .done-stats { font-family: 'Share Tech Mono', monospace; font-size: 13px; letter-spacing: 0.2em; color: var(--silver-dim); text-align: center; line-height: 2; }
+  .done-message { font-family: 'Cinzel', serif; font-size: clamp(14px,3vw,18px); letter-spacing: 0.1em; color: var(--silver); text-align: center; line-height: 1.6; padding: 20px; border: 1px solid rgba(200,205,212,0.15); background: rgba(200,205,212,0.03); position: relative; }
+  .done-message::before,.done-message::after { content: '"'; font-size: 40px; color: rgba(200,205,212,0.2); position: absolute; }
+  .done-message::before { top: -8px; left: 10px; }
+  .done-message::after { bottom: -20px; right: 10px; }
+  .btn-whatsapp { font-family: 'Cinzel', serif; font-size: 14px; font-weight: 700; letter-spacing: 0.15em; color: #000; background: #25D366; border: none; padding: 16px 32px; cursor: pointer; width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; transition: all 0.3s; box-shadow: 0 0 30px rgba(37,211,102,0.3); }
+  .btn-whatsapp:hover { box-shadow: 0 0 50px rgba(37,211,102,0.6); transform: scale(1.02); }
+  .btn-restart { font-family: 'Cinzel', serif; font-size: 13px; font-weight: 700; letter-spacing: 0.2em; color: var(--silver-bright); background: none; border: 1px solid rgba(200,205,212,0.3); padding: 14px 32px; cursor: pointer; width: 100%; transition: all 0.3s; }
+  .btn-restart:hover { border-color: var(--silver); background: rgba(200,205,212,0.06); }
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: #000; }
+  ::-webkit-scrollbar-thumb { background: rgba(200,205,212,0.2); }
+</style>
+</head>
+<body>
+
+<canvas id="bgCanvas"></canvas>
+<canvas id="particleCanvas"></canvas>
+
+<!-- INTRO -->
+<div class="screen active" id="introScreen">
+  <div class="intro-clock-wrap">
+    <canvas id="introClock" width="220" height="220"></canvas>
+    <div class="moon-symbol">☽</div>
+  </div>
+  <div class="intro-title">FOCUS TIMER</div>
+  <div class="intro-subtitle">Discipline · Endurance · Mastery</div>
+  <div class="intro-tagline" id="introTagline">The night belongs to those who conquer themselves.</div>
+  <button class="btn-start" onclick="goSetup()">TAP TO START SESSION</button>
+</div>
+
+<!-- SETUP -->
+<div class="screen" id="setupScreen">
+  <div class="setup-wrap">
+    <div class="setup-header">⚙ CONFIGURE SESSION</div>
+
+    <!-- SESSION TYPE — new stopwatch option -->
+    <div class="setup-section">
+      <div class="setup-label">▸ Session Type</div>
+      <div class="option-row">
+        <div class="opt-card selected" data-group="type" data-val="countdown" onclick="selectType(this)">
+          <div class="opt-icon">⏳</div>
+          <div class="opt-name">Countdown</div>
+          <div class="opt-desc">Set target time</div>
+        </div>
+        <div class="opt-card" data-group="type" data-val="stopwatch" onclick="selectType(this)">
+          <div class="opt-icon">⏱</div>
+          <div class="opt-name">Stopwatch</div>
+          <div class="opt-desc">Count up live</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DURATION (hidden when stopwatch) -->
+    <div class="setup-section duration-section" id="durationSection">
+      <div class="setup-label">▸ Duration</div>
+      <div class="time-inputs" style="margin-bottom:18px;">
+        <div class="time-input-wrap">
+          <input type="number" id="hoursInput" min="0" max="23" value="0" placeholder="00">
+          <label>Hours</label>
+        </div>
+        <span>:</span>
+        <div class="time-input-wrap">
+          <input type="number" id="minsInput" min="1" max="59" value="25" placeholder="25">
+          <label>Minutes</label>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODE -->
+    <div class="setup-section">
+      <div class="setup-label">▸ Mode</div>
+      <div class="option-row">
+        <div class="opt-card selected" data-group="mode" data-val="normal" onclick="selectOpt(this)">
+          <div class="opt-icon">🌙</div>
+          <div class="opt-name">Normal</div>
+          <div class="opt-desc">Pause & exit freely</div>
+        </div>
+        <div class="opt-card" data-group="mode" data-val="hard" onclick="selectOpt(this)">
+          <div class="opt-icon">⚔️</div>
+          <div class="opt-name">Hard Mode</div>
+          <div class="opt-desc">No pause, no exit</div>
+        </div>
+      </div>
+      <div class="mode-warning" id="modeWarning">⚠ Hard Mode locks your session. No pause. No retreat. Commit.</div>
+    </div>
+
+    <!-- CLOCK FACE -->
+    <div class="setup-section">
+      <div class="setup-label">▸ Clock Face</div>
+      <div class="option-row">
+        <div class="opt-card selected" data-group="face" data-val="digital" onclick="selectOpt(this)">
+          <div class="opt-icon">🔢</div><div class="opt-name">Digital</div><div class="opt-desc">Countdown</div>
+        </div>
+        <div class="opt-card" data-group="face" data-val="analog" onclick="selectOpt(this)">
+          <div class="opt-icon">🕐</div><div class="opt-name">Analog</div><div class="opt-desc">Arc progress</div>
+        </div>
+        <div class="opt-card" data-group="face" data-val="hourglass" onclick="selectOpt(this)">
+          <div class="opt-icon">⌛</div><div class="opt-name">Hourglass</div><div class="opt-desc">Sand + time</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SOUND -->
+    <div class="setup-section">
+      <div class="setup-label">▸ Ambient Sound</div>
+      <div class="option-row">
+        <div class="opt-card selected" data-group="sound" data-val="none" onclick="selectOpt(this)">
+          <div class="opt-icon">🔇</div><div class="opt-name">Silence</div>
+        </div>
+        <div class="opt-card" data-group="sound" data-val="rain" onclick="selectOpt(this)">
+          <div class="opt-icon">🌧</div><div class="opt-name">Rain</div>
+        </div>
+        <div class="opt-card" data-group="sound" data-val="white" onclick="selectOpt(this)">
+          <div class="opt-icon">🌫</div><div class="opt-name">White Noise</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- NAME -->
+    <div class="setup-section">
+      <div class="setup-label">▸ Your Name (for share)</div>
+      <input type="text" id="nameInput" placeholder="Enter your name..." maxlength="30">
+    </div>
+
+    <button class="btn-begin" onclick="beginSession()">BEGIN SESSION ▶</button>
+  </div>
+</div>
+
+<!-- TIMER -->
+<div class="screen" id="timerScreen">
+  <div class="timer-bar">
+    <button class="bar-btn" id="backBtn" onclick="handleExit()">◀ EXIT</button>
+    <div class="bar-title" id="barTitle">FOCUS SESSION</div>
+    <button class="bar-btn" onclick="toggleFullscreen()">⛶ FULL</button>
+  </div>
+  <div class="tagline-wrap">
+    <div class="tagline" id="taglineEl">Silence your excuses. Amplify your effort.</div>
+  </div>
+  <div class="clock-area">
+    <div class="clock-digital" id="clockDigital">
+      <div class="digital-time" id="digitalTime">00:00</div>
+      <div class="digital-label" id="digitalLabel">REMAINING</div>
+    </div>
+    <div class="clock-analog" id="clockAnalog">
+      <canvas id="analogCanvas" width="280" height="280"></canvas>
+      <div class="analog-time-text" id="analogTimeText">00:00</div>
+    </div>
+    <div class="clock-hourglass" id="clockHourglass">
+      <canvas id="hourglassCanvas" width="180" height="280"></canvas>
+      <div class="hourglass-time" id="hourglassTime">00:00</div>
+    </div>
+  </div>
+  <div class="bottom-bar">
+    <div class="session-info" id="sessionInfo">SESSION ACTIVE</div>
+    <button class="btn-action primary" id="pauseBtn" onclick="togglePause()">⏸ PAUSE</button>
+    <button class="btn-action" id="soundBtn" onclick="toggleSound()">🔇 SOUND</button>
+  </div>
+</div>
+
+<!-- DONE -->
+<div class="screen" id="doneScreen">
+  <div class="done-wrap">
+    <div class="done-icon">🌕</div>
+    <div class="done-title">SESSION COMPLETE</div>
+    <div class="done-stats" id="doneStats">Duration: 00:00<br>Completed: —</div>
+    <div class="done-message" id="doneMessage">You did what 80% won't do today.</div>
+    <button class="btn-whatsapp" onclick="shareWhatsApp()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.126 1.533 5.858L.057 23.882l6.186-1.455A11.946 11.946 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.793 9.793 0 01-5.001-1.374l-.357-.213-3.714.874.936-3.613-.233-.372A9.77 9.77 0 012.182 12C2.182 6.578 6.578 2.182 12 2.182S21.818 6.578 21.818 12 17.422 21.818 12 21.818z"/></svg>
+      SHARE ON WHATSAPP
+    </button>
+    <button class="btn-restart" onclick="restart()">↺ NEW SESSION</button>
+  </div>
+</div>
+
+<script>
+// ══ STATE ══
+let state = {
+  elapsed:0, remaining:0, totalDuration:0,
+  running:false, paused:false,
+  type:'countdown', mode:'normal', face:'digital', sound:'none', name:'',
+  soundOn:false, audioCtx:null, soundNode:null,
+  taglineInterval:null, timerInterval:null
+};
+
+// ══ BG + PARTICLES ══
+const bgCanvas=document.getElementById('bgCanvas'), bgCtx=bgCanvas.getContext('2d');
+const pCanvas=document.getElementById('particleCanvas'), pCtx=pCanvas.getContext('2d');
+let particles=[];
+
+function resizeCanvases(){
+  bgCanvas.width=pCanvas.width=window.innerWidth;
+  bgCanvas.height=pCanvas.height=window.innerHeight;
+  drawBG();
+}
+function drawBG(){
+  const w=bgCanvas.width,h=bgCanvas.height;
+  bgCtx.clearRect(0,0,w,h);
+  const g=bgCtx.createRadialGradient(w/2,h/2,0,w/2,h/2,Math.max(w,h)*0.7);
+  g.addColorStop(0,'#080812');g.addColorStop(1,'#000000');
+  bgCtx.fillStyle=g;bgCtx.fillRect(0,0,w,h);
+  bgCtx.save();bgCtx.globalAlpha=0.03;bgCtx.fillStyle='#c8cdd4';
+  bgCtx.beginPath();bgCtx.arc(w*0.85,h*0.15,Math.min(w,h)*0.22,0,Math.PI*2);bgCtx.fill();
+  bgCtx.globalCompositeOperation='destination-out';
+  bgCtx.beginPath();bgCtx.arc(w*0.88,h*0.12,Math.min(w,h)*0.18,0,Math.PI*2);bgCtx.fill();
+  bgCtx.restore();
+}
+function initParticles(){
+  particles=[];
+  for(let i=0;i<60;i++) particles.push({x:Math.random()*pCanvas.width,y:Math.random()*pCanvas.height,r:Math.random()*1.2+0.2,a:Math.random(),vx:(Math.random()-0.5)*0.15,vy:(Math.random()-0.5)*0.15,pulse:Math.random()*Math.PI*2});
+}
+function animateParticles(){
+  pCtx.clearRect(0,0,pCanvas.width,pCanvas.height);
+  for(const p of particles){
+    p.x+=p.vx;p.y+=p.vy;p.pulse+=0.015;
+    if(p.x<0)p.x=pCanvas.width;if(p.x>pCanvas.width)p.x=0;
+    if(p.y<0)p.y=pCanvas.height;if(p.y>pCanvas.height)p.y=0;
+    const alpha=(Math.sin(p.pulse)*0.3+0.7)*p.a*0.4;
+    pCtx.beginPath();pCtx.arc(p.x,p.y,p.r,0,Math.PI*2);
+    pCtx.fillStyle=`rgba(200,205,212,${alpha})`;pCtx.fill();
+  }
+  requestAnimationFrame(animateParticles);
+}
+
+// ══ INTRO CLOCK ══
+function animateIntroClock(){
+  const cv=document.getElementById('introClock');if(!cv)return;
+  const ctx=cv.getContext('2d'),cx=110,cy=110,r=95;
+  function draw(){
+    ctx.clearRect(0,0,220,220);const t=Date.now()/1000;
+    ctx.strokeStyle='rgba(200,205,212,0.12)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.stroke();
+    for(let i=0;i<60;i++){
+      const a=(i/60)*Math.PI*2-Math.PI/2,isMajor=i%5===0;
+      ctx.strokeStyle=isMajor?'rgba(200,205,212,0.5)':'rgba(200,205,212,0.2)';ctx.lineWidth=isMajor?1.5:0.8;
+      ctx.beginPath();ctx.moveTo(cx+Math.cos(a)*(isMajor?r-10:r-5),cy+Math.sin(a)*(isMajor?r-10:r-5));
+      ctx.lineTo(cx+Math.cos(a)*r,cy+Math.sin(a)*r);ctx.stroke();
+    }
+    const arcA=(t*0.3)%(Math.PI*2)-Math.PI/2;
+    const grd=ctx.createLinearGradient(cx-r,cy,cx+r,cy);
+    grd.addColorStop(0,'rgba(200,205,212,0)');grd.addColorStop(1,'rgba(200,205,212,0.8)');
+    ctx.strokeStyle=grd;ctx.lineWidth=2;ctx.beginPath();ctx.arc(cx,cy,r-5,arcA,arcA+Math.PI*1.5);ctx.stroke();
+    const secA=(t%60/60)*Math.PI*2-Math.PI/2;
+    ctx.strokeStyle='rgba(232,237,244,0.9)';ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.cos(secA)*(r-18),cy+Math.sin(secA)*(r-18));ctx.stroke();
+    const minA=(t/3600%1)*Math.PI*2-Math.PI/2;
+    ctx.strokeStyle='rgba(200,205,212,0.7)';ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.cos(minA)*(r-30),cy+Math.sin(minA)*(r-30));ctx.stroke();
+    ctx.fillStyle='rgba(232,237,244,0.9)';ctx.beginPath();ctx.arc(cx,cy,4,0,Math.PI*2);ctx.fill();
+    requestAnimationFrame(draw);
+  }
+  draw();
+}
+
+// ══ TAGLINES ══
+const TL_NORMAL=["Silence your excuses. Amplify your effort.","One session at a time. One life at a time.","The mind is a weapon. Sharpen it.","Focus is the currency of achievement.","You are not tired. You are distracted.","The clock doesn't pause. Neither should you.","Ordinary people wait. You act.","This moment is the work.","Champions are made in quiet rooms like this.","Depth over speed. Presence over multitasking."];
+const TL_HARD=["There is no exit but the finish.","Pain is just another name for growth.","You chose this. See it through.","The weak man finds a reason. You find a way.","No retreat. No hesitation.","Endure. That is all you need to do.","Hard Mode was made for you.","The session will end. So will the discomfort.","Discipline is the highest form of self-love.","When it gets hard — that's exactly when you stay."];
+const TL_STOPWATCH=["Every second counts. Every second is yours.","No ceiling. Just keep going.","You set the limit. Or you don't.","The watch counts up. So do you.","Limitless mode. Go as long as you dare.","Time is on your side — use it.","The longer you go, the stronger you become.","There is no finish line. Only milestones.","Flow state starts where comfort ends.","How far will you take it today?"];
+const TL_INTRO=["The night belongs to those who conquer themselves.","Every session is a battle won against distraction.","In darkness, discipline becomes your armor.","Silence is the arena where legends are forged."];
+let introIdx=0;
+setInterval(()=>{
+  introIdx=(introIdx+1)%TL_INTRO.length;
+  const el=document.getElementById('introTagline');el.style.opacity=0;
+  setTimeout(()=>{el.textContent=TL_INTRO[introIdx];el.style.opacity=1;},400);
+},5000);
+
+// ══ SCREENS ══
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>{s.classList.remove('active');s.style.opacity=0;s.style.pointerEvents='none';});
+  const s=document.getElementById(id);s.style.opacity=1;s.style.pointerEvents='all';s.classList.add('active');
+}
+function goSetup(){showScreen('setupScreen');}
+
+// ══ OPTIONS ══
+function selectOpt(el){
+  const g=el.dataset.group;
+  document.querySelectorAll(`[data-group="${g}"]`).forEach(c=>c.classList.remove('selected'));
+  el.classList.add('selected');
+  if(g==='mode') document.getElementById('modeWarning').classList.toggle('visible',el.dataset.val==='hard');
+}
+function selectType(el){
+  selectOpt(el);
+  document.getElementById('durationSection').classList.toggle('hidden',el.dataset.val==='stopwatch');
+}
+function getSelected(g){const el=document.querySelector(`[data-group="${g}"].selected`);return el?el.dataset.val:null;}
+
+// ══ BEGIN ══
+function beginSession(){
+  state.type=getSelected('type')||'countdown';
+  state.mode=getSelected('mode');
+  state.face=getSelected('face');
+  state.sound=getSelected('sound');
+  state.name=document.getElementById('nameInput').value.trim()||'You';
+  state.elapsed=0;state.paused=false;state.running=true;
+
+  if(state.type==='countdown'){
+    const h=parseInt(document.getElementById('hoursInput').value)||0;
+    const m=parseInt(document.getElementById('minsInput').value)||0;
+    const total=h*3600+m*60;
+    if(total<60){alert('Please set at least 1 minute.');return;}
+    state.totalDuration=total;state.remaining=total;
+    document.getElementById('barTitle').textContent=`${state.name.toUpperCase()} · ${formatDuration(total)}`;
+    document.getElementById('digitalLabel').textContent='REMAINING';
+  } else {
+    state.totalDuration=0;state.remaining=0;
+    document.getElementById('barTitle').textContent=`${state.name.toUpperCase()} · STOPWATCH`;
+    document.getElementById('digitalLabel').textContent='ELAPSED';
+  }
+
+  const backBtn=document.getElementById('backBtn'),pauseBtn=document.getElementById('pauseBtn');
+  if(state.mode==='hard'){backBtn.disabled=true;pauseBtn.disabled=true;backBtn.style.opacity='0.1';pauseBtn.style.opacity='0.1';}
+  else{backBtn.disabled=false;pauseBtn.disabled=false;backBtn.style.opacity='';pauseBtn.style.opacity='';}
+
+  document.querySelectorAll('.clock-digital,.clock-analog,.clock-hourglass').forEach(c=>c.classList.remove('active'));
+  document.getElementById('clock'+state.face.charAt(0).toUpperCase()+state.face.slice(1)).classList.add('active');
+
+  showScreen('timerScreen');
+
+  if(state.sound!=='none'){startAudio(state.sound);state.soundOn=true;document.getElementById('soundBtn').textContent=state.sound==='rain'?'🌧 RAIN ON':'🌫 NOISE ON';}
+  else{state.soundOn=false;document.getElementById('soundBtn').textContent='🔇 SOUND';}
+
+  const tags=state.type==='stopwatch'?TL_STOPWATCH:(state.mode==='hard'?TL_HARD:TL_NORMAL);
+  let ti=0;document.getElementById('taglineEl').textContent=tags[0];
+  clearInterval(state.taglineInterval);
+  state.taglineInterval=setInterval(()=>{
+    ti=(ti+1)%tags.length;const el=document.getElementById('taglineEl');el.style.opacity=0;
+    setTimeout(()=>{el.textContent=tags[ti];el.style.opacity=1;},400);
+  },5000);
+
+  clearInterval(state.timerInterval);
+  state.timerInterval=setInterval(tick,1000);
+  updateClock();
+}
+
+function tick(){
+  if(!state.running||state.paused)return;
+  state.elapsed++;
+  if(state.type==='countdown'){
+    state.remaining--;
+    if(state.remaining<=0){clearInterval(state.timerInterval);clearInterval(state.taglineInterval);state.running=false;finishSession();return;}
+  }
+  updateClock();
+}
+
+function updateClock(){
+  const disp=state.type==='stopwatch'?state.elapsed:state.remaining;
+  if(state.face==='digital'){
+    document.getElementById('digitalTime').textContent=formatTime(disp);
+    document.getElementById('digitalTime').style.color=(state.type==='countdown'&&state.remaining<=10&&state.remaining%2===0)?'rgba(200,205,212,0.5)':'';
+  } else if(state.face==='analog'){
+    document.getElementById('analogTimeText').textContent=formatTime(disp);
+    drawAnalog();
+  } else {
+    document.getElementById('hourglassTime').textContent=formatTime(disp);
+  }
+  if(state.type==='stopwatch'){
+    document.getElementById('sessionInfo').textContent=`ELAPSED: ${formatTime(state.elapsed)}`;
+  } else {
+    document.getElementById('sessionInfo').textContent=`ELAPSED: ${formatTime(state.elapsed)}  ·  REMAINING: ${formatTime(state.remaining)}`;
+  }
+}
+
+// ══ ANALOG — FIXED: hands go CLOCKWISE forward based on ELAPSED time ══
+function drawAnalog(){
+  const cv=document.getElementById('analogCanvas');
+  const ctx=cv.getContext('2d');
+  const cx=140,cy=140,R=118;
+  ctx.clearRect(0,0,280,280);
+
+  // Progress arc = elapsed fraction sweeping clockwise
+  let progress;
+  if(state.type==='stopwatch'){
+    progress=(state.elapsed%3600)/3600; // one lap per 60 min
+  } else {
+    progress=state.totalDuration>0?state.elapsed/state.totalDuration:0;
+  }
+
+  // BG ring
+  ctx.strokeStyle='rgba(200,205,212,0.08)';ctx.lineWidth=9;
+  ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.stroke();
+
+  // Progress arc (clockwise from top)
+  const startA=-Math.PI/2, endA=startA+progress*Math.PI*2;
+  if(progress>0){
+    const pg=ctx.createLinearGradient(cx-R,cy,cx+R,cy);
+    pg.addColorStop(0,'rgba(200,205,212,0.4)');pg.addColorStop(1,'rgba(232,237,244,0.95)');
+    ctx.strokeStyle=pg;ctx.lineWidth=9;ctx.lineCap='round';
+    ctx.beginPath();ctx.arc(cx,cy,R,startA,endA);ctx.stroke();
+  }
+  // Glow dot at tip
+  const tipA=progress>0?endA:startA;
+  ctx.shadowColor='rgba(200,205,212,0.8)';ctx.shadowBlur=15;
+  ctx.fillStyle='rgba(232,237,244,1)';
+  ctx.beginPath();ctx.arc(cx+Math.cos(tipA)*R,cy+Math.sin(tipA)*R,5,0,Math.PI*2);ctx.fill();
+  ctx.shadowBlur=0;
+
+  // Tick marks
+  for(let i=0;i<60;i++){
+    const a=(i/60)*Math.PI*2-Math.PI/2,isMajor=i%5===0;
+    ctx.strokeStyle=isMajor?'rgba(200,205,212,0.4)':'rgba(200,205,212,0.15)';ctx.lineWidth=isMajor?1.5:0.8;ctx.lineCap='butt';
+    ctx.beginPath();
+    ctx.moveTo(cx+Math.cos(a)*(isMajor?R-15:R-8),cy+Math.sin(a)*(isMajor?R-15:R-8));
+    ctx.lineTo(cx+Math.cos(a)*(R-2),cy+Math.sin(a)*(R-2));ctx.stroke();
+  }
+  // Hour numbers
+  ctx.fillStyle='rgba(200,205,212,0.3)';ctx.font='bold 12px Share Tech Mono,monospace';ctx.textAlign='center';ctx.textBaseline='middle';
+  [[12,0],[3,90],[6,180],[9,270]].forEach(([n,deg])=>{
+    const a=deg*Math.PI/180-Math.PI/2;
+    ctx.fillText(n,cx+Math.cos(a)*(R-32),cy+Math.sin(a)*(R-32));
+  });
+
+  // ── HANDS: all driven by ELAPSED seconds, rotating CLOCKWISE ──
+  // Second hand: full circle every 60s
+  const secA=(state.elapsed%60/60)*Math.PI*2-Math.PI/2;
+  // Minute hand: full circle every 3600s
+  const minA=(state.elapsed%3600/3600)*Math.PI*2-Math.PI/2;
+  // Hour hand: full circle every 43200s (12 hours)
+  const hourA=(state.elapsed%43200/43200)*Math.PI*2-Math.PI/2;
+
+  // Hour hand
+  ctx.strokeStyle='rgba(200,205,212,0.55)';ctx.lineWidth=4;ctx.lineCap='round';
+  ctx.beginPath();ctx.moveTo(cx-Math.cos(hourA)*14,cy-Math.sin(hourA)*14);
+  ctx.lineTo(cx+Math.cos(hourA)*52,cy+Math.sin(hourA)*52);ctx.stroke();
+
+  // Minute hand
+  ctx.strokeStyle='rgba(200,205,212,0.9)';ctx.lineWidth=2.5;
+  ctx.beginPath();ctx.moveTo(cx-Math.cos(minA)*16,cy-Math.sin(minA)*16);
+  ctx.lineTo(cx+Math.cos(minA)*78,cy+Math.sin(minA)*78);ctx.stroke();
+
+  // Second hand
+  ctx.strokeStyle='rgba(232,237,244,1)';ctx.lineWidth=1.2;
+  ctx.beginPath();ctx.moveTo(cx-Math.cos(secA)*20,cy-Math.sin(secA)*20);
+  ctx.lineTo(cx+Math.cos(secA)*92,cy+Math.sin(secA)*92);ctx.stroke();
+
+  // Center cap
+  ctx.fillStyle='#e8edf4';ctx.beginPath();ctx.arc(cx,cy,5,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#000';ctx.beginPath();ctx.arc(cx,cy,2,0,Math.PI*2);ctx.fill();
+}
+
+// ══ HOURGLASS animate loop ══
+function animateHourglass(){
+  if(!state.running&&!state.paused)return;
+  const cv=document.getElementById('hourglassCanvas');
+  const ctx=cv.getContext('2d');
+  const W=180,H=280;ctx.clearRect(0,0,W,H);
+  let progress;
+  if(state.type==='stopwatch'){
+    progress=Math.min(state.elapsed/3600,1); // top drains over 60 min
+  } else {
+    progress=state.totalDuration>0?state.remaining/state.totalDuration:0;
+  }
+  const cx=W/2,topY=30,botY=H-30,midY=H/2,wTop=65,wBot=65,wNeck=8;
+  // Outline
+  ctx.strokeStyle='rgba(200,205,212,0.3)';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(cx-wTop,topY);ctx.lineTo(cx+wTop,topY);ctx.lineTo(cx+wNeck,midY);ctx.lineTo(cx+wBot,botY);ctx.lineTo(cx-wBot,botY);ctx.lineTo(cx-wNeck,midY);ctx.closePath();ctx.stroke();
+  // Top sand
+  const topH=(midY-topY-4)*progress;
+  if(topH>0){
+    ctx.save();ctx.beginPath();ctx.moveTo(cx-wTop,topY);ctx.lineTo(cx+wTop,topY);ctx.lineTo(cx+wNeck,midY);ctx.lineTo(cx-wNeck,midY);ctx.closePath();ctx.clip();
+    const sg=ctx.createLinearGradient(cx,midY-topH,cx,midY);sg.addColorStop(0,'rgba(200,205,212,0.5)');sg.addColorStop(1,'rgba(232,237,244,0.15)');
+    ctx.fillStyle=sg;ctx.fillRect(cx-wTop,midY-topH,wTop*2,topH);ctx.restore();
+  }
+  // Bottom sand
+  const botH=(botY-midY-4)*(1-progress);
+  if(botH>0){
+    ctx.save();ctx.beginPath();ctx.moveTo(cx-wNeck,midY);ctx.lineTo(cx+wNeck,midY);ctx.lineTo(cx+wBot,botY);ctx.lineTo(cx-wBot,botY);ctx.closePath();ctx.clip();
+    const bg=ctx.createLinearGradient(cx,botY-botH,cx,botY);bg.addColorStop(0,'rgba(232,237,244,0.7)');bg.addColorStop(1,'rgba(200,205,212,0.3)');
+    ctx.fillStyle=bg;ctx.fillRect(cx-wBot,botY-botH,wBot*2,botH);ctx.restore();
+  }
+  // Falling grain
+  if(progress>0.01&&progress<0.99){
+    const py=midY+((Date.now()/500)%1)*(botY-midY-botH-4);
+    ctx.fillStyle='rgba(232,237,244,0.9)';ctx.beginPath();ctx.arc(cx,py,2,0,Math.PI*2);ctx.fill();
+  }
+  // Edge glows
+  ctx.shadowColor='rgba(200,205,212,0.5)';ctx.shadowBlur=10;ctx.strokeStyle='rgba(200,205,212,0.6)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(cx-wTop,topY);ctx.lineTo(cx+wTop,topY);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(cx-wBot,botY);ctx.lineTo(cx+wBot,botY);ctx.stroke();
+  ctx.shadowBlur=0;
+  requestAnimationFrame(animateHourglass);
+}
+let hourglassRunning=false;
+function startHourglassLoop(){if(hourglassRunning)return;hourglassRunning=true;animateHourglass();}
+
+// ══ AUDIO ══
+function startAudio(type){
+  stopAudio();
+  try{
+    const ctx=new(window.AudioContext||window.webkitAudioContext)();state.audioCtx=ctx;
+    if(type==='white'){
+      const buf=ctx.createBuffer(1,ctx.sampleRate*2,ctx.sampleRate);const d=buf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
+      const src=ctx.createBufferSource();src.buffer=buf;src.loop=true;
+      const gain=ctx.createGain();gain.gain.value=0.04;const filter=ctx.createBiquadFilter();filter.type='lowpass';filter.frequency.value=1200;
+      src.connect(filter);filter.connect(gain);gain.connect(ctx.destination);src.start();state.soundNode=src;
+    }else if(type==='rain'){
+      const mk=(freq,q,gain,rate)=>{
+        const buf=ctx.createBuffer(1,ctx.sampleRate*2,ctx.sampleRate);const d=buf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
+        const src=ctx.createBufferSource();src.buffer=buf;src.loop=true;src.playbackRate.value=rate;
+        const f=ctx.createBiquadFilter();f.type='bandpass';f.frequency.value=freq;f.Q.value=q;
+        const g=ctx.createGain();g.gain.value=gain;src.connect(f);f.connect(g);g.connect(ctx.destination);src.start();return src;
+      };
+      const l1=mk(400,0.5,0.05,1),l2=mk(2000,1,0.03,1.3),l3=mk(8000,2,0.02,0.8);
+      state.soundNode={stop:()=>{try{l1.stop();l2.stop();l3.stop();}catch(e){}}};
+    }
+  }catch(e){}
+}
+function stopAudio(){
+  if(state.soundNode){try{state.soundNode.stop?state.soundNode.stop():null;}catch(e){}state.soundNode=null;}
+  if(state.audioCtx){try{state.audioCtx.close();}catch(e){}state.audioCtx=null;}
+}
+function toggleSound(){
+  if(state.sound==='none')return;
+  state.soundOn=!state.soundOn;
+  const btn=document.getElementById('soundBtn');
+  if(state.soundOn){startAudio(state.sound);btn.textContent=state.sound==='rain'?'🌧 RAIN ON':'🌫 NOISE ON';}
+  else{stopAudio();btn.textContent='🔇 MUTED';}
+}
+
+// ══ PAUSE ══
+function togglePause(){
+  if(state.mode==='hard')return;
+  state.paused=!state.paused;
+  document.getElementById('pauseBtn').textContent=state.paused?'▶ RESUME':'⏸ PAUSE';
+  if(state.paused){stopAudio();document.getElementById('sessionInfo').textContent='— PAUSED —';}
+  else{if(state.soundOn&&state.sound!=='none')startAudio(state.sound);}
+}
+
+// ══ EXIT ══
+function handleExit(){
+  if(state.mode==='hard')return;
+  const msg=state.type==='stopwatch'?'Stop stopwatch and see results?':'Exit session? Progress will be lost.';
+  if(!confirm(msg))return;
+  clearInterval(state.timerInterval);clearInterval(state.taglineInterval);
+  stopAudio();state.running=false;hourglassRunning=false;
+  if(state.type==='stopwatch'&&state.elapsed>0){finishSession();}
+  else{showScreen('setupScreen');}
+}
+
+// ══ FINISH ══
+const DONE_MSGS=["You did what 80% couldn't do today. Remember that.","The gap between you and the rest just widened. Good.","Focused. Disciplined. Unstoppable. That's who you are.","Every session like this is a vote for the life you deserve.","You showed up. That's already more than most.","The version of you who quit doesn't live here.","Today you chose hard over easy. That's rare. That's you.","One session. One win. Stack them and watch your life transform.","Discipline compounds. What you built today lasts forever.","The world runs on distraction. You just opted out."];
+function finishSession(){
+  clearInterval(state.taglineInterval);stopAudio();hourglassRunning=false;
+  try{
+    const ctx=new(window.AudioContext||window.webkitAudioContext)();
+    const play=(freq,s,d)=>{const o=ctx.createOscillator(),g=ctx.createGain();o.connect(g);g.connect(ctx.destination);o.frequency.value=freq;o.type='sine';g.gain.setValueAtTime(0,ctx.currentTime+s);g.gain.linearRampToValueAtTime(0.4,ctx.currentTime+s+0.02);g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+s+d);o.start(ctx.currentTime+s);o.stop(ctx.currentTime+s+d);};
+    play(880,0,0.4);play(1100,0.45,0.4);play(1320,0.9,0.8);
+  }catch(e){}
+  const dur=state.type==='stopwatch'?state.elapsed:state.totalDuration;
+  document.getElementById('doneStats').innerHTML=`Session Duration: <strong>${formatDuration(dur)}</strong><br>Completed: ${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`;
+  document.getElementById('doneMessage').textContent=DONE_MSGS[Math.floor(Math.random()*DONE_MSGS.length)];
+  showScreen('doneScreen');
+}
+
+// ══ WHATSAPP ══
+function shareWhatsApp(){
+  const dur=formatDuration(state.type==='stopwatch'?state.elapsed:state.totalDuration);
+  const mode=state.mode==='hard'?'HARD MODE 🔥':'Normal Mode';
+  const typeLabel=state.type==='stopwatch'?'Stopwatch Session':'Deep Focus';
+  const msg=encodeURIComponent(`🌙 *FOCUS SESSION COMPLETE*\n\n👤 *${state.name}* just crushed a *${dur}* ${typeLabel} — ${mode}!\n\n"You did what 80% couldn't do today."\n\n🔢 Powered by Focus Timer`);
+  window.open(`https://wa.me/?text=${msg}`,'_blank');
+}
+
+function toggleFullscreen(){
+  if(!document.fullscreenElement)document.documentElement.requestFullscreen?.();
+  else document.exitFullscreen?.();
+}
+function restart(){state.running=false;state.paused=false;state.elapsed=0;state.remaining=0;hourglassRunning=false;showScreen('setupScreen');}
+
+// ══ HELPERS ══
+function formatTime(s){
+  const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;
+  if(h>0)return `${pad(h)}:${pad(m)}:${pad(sec)}`;
+  return `${pad(m)}:${pad(sec)}`;
+}
+function formatDuration(s){
+  const h=Math.floor(s/3600),m=Math.floor((s%3600)/60);
+  if(h>0)return `${h}h ${m}m`;return `${m} min`;
+}
+function pad(n){return String(n).padStart(2,'0');}
+
+// Override show clock to start hourglass animation
+const origBegin=beginSession;
+// Hook into clock face activation to start hourglass RAF loop
+const _origShow=showScreen;
+window.showScreen=function(id){
+  _origShow(id);
+  if(id==='timerScreen'&&state.face==='hourglass'){startHourglassLoop();}
+};
+
+// ══ INIT ══
+window.addEventListener('resize',()=>{resizeCanvases();initParticles();});
+resizeCanvases();initParticles();animateParticles();animateIntroClock();
+</script>
+</body>
+</html>
